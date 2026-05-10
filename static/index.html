@@ -1,0 +1,85 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kantor Online</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+
+<body>
+
+<div class="container">
+    <h1>Kantor Online</h1>
+
+    <div id="authSection">
+        <input type="text" id="usernameField" placeholder="Login">
+        <input type="password" id="passwordField" placeholder="Hasło">
+        <div class="button-group">
+            <button class="btn-login" onclick="handleLogin()">Zaloguj</button>
+            <button class="btn-register" onclick="handleRegister()">Rejestracja</button>
+        </div>
+    </div>
+
+    <div id="exchangeSection" class="hidden">
+        <h3>Witaj, <span id="displayUser"></span>!</h3>
+        
+        <div class="wallet-card">
+            <div class="wallet-row pln-top">
+                <p>Saldo: <strong id="balancePLN">0.00</strong> PLN</p>
+            </div>
+            <div id="otherCurrencies" class="wallet-row currencies-mid">
+                <small>Waluty: brak</small>
+            </div>
+            <div class="wallet-row button-bottom">
+                <button class="btn-deposit-full-width" onclick="handleDeposit()">➕ Doładuj środki</button>
+            </div>
+        </div>
+
+        <div class="exchange-form">
+            <label class="input-label">Wpisz kod waluty, którą płacisz (np. PLN, USD):</label>
+            <input type="text" id="payCurrCode" placeholder="Z jakiej waluty">
+
+            <label class="input-label">Wpisz kod waluty, którą chcesz kupić (np. EUR, GBP):</label>
+            <input type="text" id="currCode" placeholder="Na jaką walutę">
+            
+            <label class="input-label">Wpisz kwotę:</label>
+            <input type="number" id="plnAmount" placeholder="Kwota">
+            
+            <button class="btn-buy" onclick="handleExchange()">KUPUJĘ</button>
+        </div>
+
+        <div id="status"></div>
+
+        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+
+        <button class="btn-toggle" onclick="toggleOptions()">Opcje konta</button>
+        <button class="btn-logout" onclick="handleLogout()">Wyloguj się</button>
+    </div>
+</div>
+
+<div id="optionsModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="close-btn" onclick="toggleOptions()">&times;</span>
+        <h3>⚙️ Opcje konta</h3>
+        
+        <label class="input-label">Zmień login:</label>
+        <input type="text" id="newUsername" placeholder="Nowy login">
+        <button class="btn-small" onclick="updateAccount('username')">Zmień login</button>
+        
+        <label class="input-label">Zmień hasło:</label>
+        <input type="password" id="newPassword" placeholder="Nowe hasło">
+        <button class="btn-small" onclick="updateAccount('password')">Zmień hasło</button>
+        
+        <hr>
+        <button class="btn-delete" onclick="deleteAccount()">Usuń konto całkowicie</button>
+    </div>
+</div>
+
+
+<script src="/static/script.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="/static/script.js"></script>
+
+</body>
+</html>
