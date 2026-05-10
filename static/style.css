@@ -1,0 +1,233 @@
+:root {
+    --primary: #3498db;
+    --secondary: #2ecc71;
+    --danger: #e74c3c;
+    --dark: #2c3e50;
+    --light: #ecf0f1;
+    --shadow: 0 4px 15px rgba(0,0,0,0.1);
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #f5f7fa 0%, #c3cfe2 100%);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    min-height: 100vh;
+    margin: 0;
+}
+
+.container {
+    background: white;
+    width: 100%;
+    max-width: 450px;
+    padding: 30px;
+    border-radius: 20px;
+    box-shadow: var(--shadow);
+}
+
+h1 { text-align: center; color: var(--dark); margin-bottom: 30px; }
+h3 { color: var(--dark); border-bottom: 2px solid var(--light); padding-bottom: 10px; }
+
+input {
+    width: 100%;
+    padding: 12px 15px;
+    margin: 10px 0;
+    border: 1px solid #ddd;
+    border-radius: 10px;
+    box-sizing: border-box;
+    font-size: 16px;
+}
+
+button {
+    width: 100%;
+    padding: 12px;
+    margin: 10px 0;
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    font-weight: bold;
+    transition: all 0.2s;
+}
+
+button:active { transform: scale(0.98); }
+
+.button-group { display: flex; gap: 10px; }
+
+.btn-login { background: var(--secondary); color: white; }
+.btn-register { background: var(--primary); color: white; }
+.btn-buy { background: #f1c40f; color: var(--dark); font-size: 18px; margin-top: 20px; }
+.btn-buy:hover { background: #d4ac0d; }
+
+.wallet-card {
+    background: #ffffff;
+    padding: 20px;
+    border-radius: 12px;
+    border-top: 5px solid #3498db;
+    display: flex;
+    flex-direction: column;
+    gap: 15px;
+    margin-bottom: 25px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.08);
+}
+
+.wallet-row {
+    width: 100%;
+}
+
+.pln-top p {
+    margin: 0;
+    font-size: 22px;
+    color: #2c3e50;
+    text-align: left; /* Saldo zostaje po lewej */
+}
+
+.currencies-mid {
+    font-size: 14px;
+    color: #7f8c8d;
+    padding: 10px 0;
+    border-top: 1px solid #eee;
+    border-bottom: 1px solid #eee;
+    text-align: left;
+}
+
+/* NOWY STYL: GUZIK NA CAŁĄ SZEROKOŚĆ Z OPRAWKĄ */
+.btn-deposit-full-width {
+    background: #fafffd;
+    color: #27ae60;
+    border: 2px solid #2ecc71;
+    padding: 12px; /* Trochę grubiej, żeby lepiej wyglądał */
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: bold;
+    width: 100%; /* ROZCIĄGNIĘCIE NA CAŁY BOX */
+    display: block;
+    transition: all 0.3s ease;
+    box-shadow: 0 2px 4px rgba(46, 204, 113, 0.1);
+    box-sizing: border-box; /* Żeby padding nie rozpychał guzika poza kartę */
+}
+
+.btn-deposit-full-width:hover {
+    background: #2ecc71;
+    color: white;
+    box-shadow: 0 4px 10px rgba(46, 204, 113, 0.2);
+}
+
+.wallet-card p { margin: 0; font-size: 18px; }
+#otherCurrencies { margin-top: 10px; color: #7f8c8d; }
+
+.hidden { display: none; }
+
+.options-panel {
+    background: #f9f9f9;
+    padding: 15px;
+    border-radius: 15px;
+    border: 1px dashed #ccc;
+    margin-top: 15px;
+}
+
+.option-item { margin-bottom: 15px; }
+.btn-small { background: #9b59b6; color: white; padding: 8px; font-size: 13px; }
+.btn-toggle { background: #95a5a6; color: white; }
+.btn-delete { background: var(--danger); color: white; margin-top: 20px; }
+.btn-logout { background: transparent; color: #95a5a6; text-decoration: underline; margin-top: 20px; }
+
+.error { color: var(--danger); font-size: 14px; text-align: center; margin-top: 5px; }
+
+.info {
+    background-color: #d4edda;
+    color: #155724;
+    padding: 15px;
+    border-radius: 8px;
+    border-left: 5px solid #28a745;
+    margin-top: 15px;
+    line-height: 1.5;
+}
+
+.info b {
+    font-size: 1.1em;
+}
+
+/* Tło modala (zaciemnienie strony) */
+.modal {
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0,0,0,0.5); /* Ściemnienie tła */
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Okienko z treścią */
+.modal-content {
+    background-color: white;
+    padding: 25px;
+    border-radius: 15px;
+    width: 350px;
+    position: relative;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-50px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+/* Przycisk zamknięcia (X) */
+.close-btn {
+    position: absolute;
+    right: 15px;
+    top: 10px;
+    font-size: 24px;
+    cursor: pointer;
+    color: #888;
+}
+
+.close-btn:hover { color: #000; }
+
+.hidden { display: none !important; }
+
+/* Styl przycisku usuwania wewnątrz modala */
+.btn-delete {
+    background: #e74c3c;
+    color: white;
+    border: none;
+    padding: 10px;
+    width: 100%;
+    border-radius: 8px;
+    cursor: pointer;
+    margin-top: 10px;
+}
+.btn-toggle {
+    background: #95a5a6;
+    color: white;
+    margin-top: 10px;
+    border: none;
+    padding: 10px;
+    border-radius: 8px;
+    width: 100%;
+    cursor: pointer;
+}
+
+.btn-logout {
+    background: transparent;
+    color: #e74c3c;
+    border: 1px solid #e74c3c;
+    margin-top: 10px;
+    padding: 8px;
+    border-radius: 8px;
+    width: 100%;
+    cursor: pointer;
+    font-size: 13px;
+    transition: 0.3s;
+}
+
+.btn-logout:hover {
+    background: #fff5f5;
+}
