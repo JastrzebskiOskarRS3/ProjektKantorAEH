@@ -38,8 +38,10 @@ Aplikacja webowa do wymiany walut z wykorzystaniem rzeczywistych kursów z Narod
 ```bash
 git clone <repository-url>
 cd kantor-online
+```
 
 2. **Utwórz i aktywuj środowisko wirtualne**
+ ```bash
 # Windows
 python -m venv venv
 venv\Scripts\activate
@@ -47,10 +49,14 @@ venv\Scripts\activate
 # Linux/Mac
 python -m venv venv
 source venv/bin/activate
+```
 
 3. **Zainstaluj zależności z pliku requirments.txt**
+```bash 
 pip install -r requirements.txt
+```
 
-4. **Uruchom aplikację**
+5. **Uruchom aplikację**
+```bash 
 uvicorn main:app --reload
-
+```
