@@ -56,7 +56,41 @@ source venv/bin/activate
 pip install -r requirements.txt
 ```
 
-5. **Uruchom aplikację**
+4. **Uruchom aplikację**
 ```bash 
 uvicorn main:app --reload
 ```
+5. Otwórz przeglądarkę i przejdź pod adres:
+```bash
+http://localhost:8000
+```
+## Struktura projektu
+```bash
+kantor-online/
+├── main.py              # Główna aplikacja FastAPI (endpointy)
+├── auth.py              # Autoryzacja, JWT, hashowanie haseł
+├── database.py          # Modele bazy danych i konfiguracja
+├── test_main.py         # Testy jednostkowe
+├── static/
+│   ├── index.html       # Interfejs użytkownika
+│   ├── script.js        # Logika frontendowa
+│   └── style.css        # Style CSS
+└── database.db          # Plik bazy SQLite (tworzony automatycznie)
+```
+## Uruchamianie testów 
+```bash
+pytest test_main.py -v
+```
+## Uwagi dotyczące bezpieczeństwa
+Hasła są haszowane przy użyciu bcrypt
+
+Tokeny JWT mają ważność 30 minut
+
+Klucz sekretny JWT (SECRET_KEY) powinien być zmieniony w środowisku produkcyjnym
+
+Walidacja danych wejściowych po stronie serwera
+
+## Licencja
+Projekt edukacyjny - do wykorzystania w celach naukowych.
+## Autorzy
+
