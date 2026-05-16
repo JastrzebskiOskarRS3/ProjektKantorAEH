@@ -92,5 +92,4 @@ Walidacja danych wejściowych po stronie serwera
 
 ## Licencja
 Projekt edukacyjny - do wykorzystania w celach naukowych.
-## Autorzy
 
