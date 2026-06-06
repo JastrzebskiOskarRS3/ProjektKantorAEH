@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html lang="pl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Płatność udana - Kantor Online</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0F172A 0%, #0B1120 100%);
+            color: #F1F5F9;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .container { text-align: center; padding: 2rem; }
+        .success-icon { font-size: 5rem; margin-bottom: 1rem; }
+        h1 { font-size: 2rem; margin-bottom: 1rem; }
+        p { color: #9CA3AF; margin-bottom: 2rem; }
+        .btn {
+            background: linear-gradient(135deg, #3B82F6, #2563EB);
+            color: white;
+            border: none;
+            padding: 0.8rem 2rem;
+            border-radius: 2rem;
+            font-size: 1rem;
+            cursor: pointer;
+            text-decoration: none;
+            display: inline-block;
+        }
+        .btn:hover { transform: translateY(-2px); }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">✅</div>
+        <h1>Płatność Stripe udana!</h1>
+        <p>Twoje konto zostało doładowane.<br>Możesz wrócić do kantoru i kontynuować wymianę.</p>
+        <a href="/" class="btn">Wróć do kantoru</a>
+    </div>
+    <script>
+        setTimeout(() => { window.location.href = '/'; }, 3000);
+    </script>
+</body>
+</html>
