@@ -216,8 +216,3 @@ Testy obejmują 7 klas:
 - baza SQLite tworzona automatycznie przy pierwszym uruchomieniu
 - obsługiwane waluty: USD, EUR, GBP, CHF, JPY, CAD, AUD, NOK, SEK, PLN
 
----
-
-## Licencja
-
-MIT
