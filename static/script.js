@@ -1,63 +1,262 @@
 let authToken = localStorage.getItem("token") || "";
-let userCurrencies = {};
+let availableCurrencies = [];
+let currentRates = {};
 
-window.onload = function() {
+window.onload = async () => {
+    await loadRates();
+    await loadCurrencies();
+    await initStripe();
     if (authToken) {
-        document.getElementById('authSection').classList.add('hidden');
-        document.getElementById('exchangeSection').classList.remove('hidden');
-        updateWallet();
+        await loadUserData();
+        showPrivateView();
+    } else {
+        showPublicView();
+    }
+    setupCalculatorListeners();
+    setupExchangePreview();
+    
+    // DODAJ TE LINIE - przypisanie event listeners do przycisków
+    const loginBtn = document.getElementById('loginButton');
+    const registerBtn = document.getElementById('registerButton');
+    
+    if (loginBtn) {
+        loginBtn.addEventListener('click', handleLogin);
+    }
+    if (registerBtn) {
+        registerBtn.addEventListener('click', handleRegister);
+    }
+    
+    // ZABLOKUJ automatyczne submitowanie na Enter
+    const loginUserInput = document.getElementById('loginUser');
+    const loginPassInput = document.getElementById('loginPass');
+    const regUserInput = document.getElementById('regUser');
+    const regPassInput = document.getElementById('regPass');
+    
+    if (loginUserInput) {
+        loginUserInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleLogin();
+            }
+        });
+    }
+    if (loginPassInput) {
+        loginPassInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleLogin();
+            }
+        });
+    }
+    if (regUserInput) {
+        regUserInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleRegister();
+            }
+        });
+    }
+    if (regPassInput) {
+        regPassInput.addEventListener('keypress', function(e) {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                handleRegister();
+            }
+        });
     }
 };
 
-async function updateWallet() {
+async function loadRates() {
+    const grid = document.getElementById('ratesGrid');
+    grid.innerHTML = '<div class="loading">Ładowanie kursów...</div>';
+    try {
+        const res = await fetch('/rates');
+        const data = await res.json();
+        currentRates = data;
+        const currencies = Object.keys(data).filter(c => c !== 'PLN');
+        grid.innerHTML = currencies.map(curr => `
+            <div class="rate-card" onclick="setCurrencyForExchange('${curr}')">
+                <div class="rate-currency">${curr}</div>
+                <div class="rate-value">${data[curr].toFixed(4)} PLN</div>
+                <div class="rate-base">1 ${curr}</div>
+            </div>
+        `).join('');
+    } catch(e) {
+        grid.innerHTML = '<div class="loading">Nie udało się pobrać kursów</div>';
+    }
+}
+
+function setCurrencyForExchange(currency) {
+    if (document.getElementById('privateView').classList.contains('hidden')) {
+        openAuthModal();
+        return;
+    }
+    document.getElementById('toCurrency').value = currency;
+    updateExchangePreview();
+    updateCalculator();
+}
+
+async function loadCurrencies() {
+    try {
+        const res = await fetch('/rates');
+        const data = await res.json();
+        availableCurrencies = Object.keys(data).sort();
+        currentRates = data;
+    } catch(e) {
+        availableCurrencies = ["PLN", "USD", "EUR", "GBP", "CHF", "JPY", "CAD", "AUD", "NZD", "NOK", "SEK", "DKK", "CZK", "HUF"];
+    }
+    
+    const fromSelect = document.getElementById('fromCurrency');
+    const toSelect = document.getElementById('toCurrency');
+    const calcFrom = document.getElementById('calcFromCurrency');
+    const calcTo = document.getElementById('calcToCurrency');
+    
+    const options = availableCurrencies.map(c => `<option value="${c}">${c}</option>`).join('');
+    
+    if (fromSelect) fromSelect.innerHTML = options;
+    if (toSelect) toSelect.innerHTML = options;
+    if (calcFrom) calcFrom.innerHTML = options;
+    if (calcTo) calcTo.innerHTML = options;
+    
+    if (fromSelect) fromSelect.value = "PLN";
+    if (toSelect) toSelect.value = "EUR";
+    if (calcFrom) calcFrom.value = "PLN";
+    if (calcTo) calcTo.value = "EUR";
+    
+    updateCalculator();
+    updateExchangePreview();
+}
+
+function setupCalculatorListeners() {
+    const calcFromAmount = document.getElementById('calcFromAmount');
+    const calcFromCurrency = document.getElementById('calcFromCurrency');
+    const calcToCurrency = document.getElementById('calcToCurrency');
+    
+    if (calcFromAmount) calcFromAmount.addEventListener('input', updateCalculator);
+    if (calcFromCurrency) calcFromCurrency.addEventListener('change', updateCalculator);
+    if (calcToCurrency) calcToCurrency.addEventListener('change', updateCalculator);
+}
+
+function setupExchangePreview() {
+    const fromCurrency = document.getElementById('fromCurrency');
+    const toCurrency = document.getElementById('toCurrency');
+    const amount = document.getElementById('amount');
+    
+    if (fromCurrency) fromCurrency.addEventListener('change', updateExchangePreview);
+    if (toCurrency) toCurrency.addEventListener('change', updateExchangePreview);
+    if (amount) amount.addEventListener('input', updateExchangePreview);
+}
+
+function updateCalculator() {
+    const fromAmount = parseFloat(document.getElementById('calcFromAmount')?.value) || 0;
+    const fromCurr = document.getElementById('calcFromCurrency')?.value || 'PLN';
+    const toCurr = document.getElementById('calcToCurrency')?.value || 'EUR';
+    
+    if (!currentRates[fromCurr] || !currentRates[toCurr]) return;
+    
+    const fromRate = currentRates[fromCurr];
+    const toRate = currentRates[toCurr];
+    
+    const toAmount = (fromAmount * fromRate) / toRate;
+    
+    const toInput = document.getElementById('calcToAmount');
+    if (toInput) toInput.value = toAmount.toFixed(4);
+    
+    const rateInfo = document.getElementById('liveRateInfo');
+    if (rateInfo) {
+        rateInfo.innerHTML = `📊 1 ${fromCurr} = ${(fromRate / toRate).toFixed(4)} ${toCurr} • 1 ${toCurr} = ${(toRate / fromRate).toFixed(4)} ${fromCurr}`;
+    }
+}
+
+function updateExchangePreview() {
+    const fromCurr = document.getElementById('fromCurrency')?.value || 'PLN';
+    const toCurr = document.getElementById('toCurrency')?.value || 'EUR';
+    const amount = parseFloat(document.getElementById('amount')?.value) || 0;
+    
+    if (!currentRates[fromCurr] || !currentRates[toCurr]) return;
+    
+    const fromRate = currentRates[fromCurr];
+    const toRate = currentRates[toCurr];
+    
+    const receivedAmount = (amount * fromRate) / toRate;
+    
+    const previewDiv = document.getElementById('exchangePreview');
+    if (previewDiv && amount > 0) {
+        previewDiv.innerHTML = `📈 Podgląd: Otrzymasz ${receivedAmount.toFixed(4)} ${toCurr} za ${amount.toFixed(2)} ${fromCurr}<br>📉 Kurs: 1 ${fromCurr} = ${(fromRate / toRate).toFixed(4)} ${toCurr}`;
+    } else if (previewDiv) {
+        previewDiv.innerHTML = `📊 1 ${fromCurr} = ${(fromRate / toRate).toFixed(4)} ${toCurr} • 1 ${toCurr} = ${(toRate / fromRate).toFixed(4)} ${fromCurr}`;
+    }
+}
+
+async function loadUserData() {
     try {
         const res = await fetch('/users/me', {
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-        if (res.status === 401) { handleLogout(); return; }
-        
-        const data = await res.json();
-        
-        userCurrencies = data.currencies || {};
-        userCurrencies["PLN"] = data.balance_pln;
-
-        document.getElementById('displayUser').innerText = data.username;
-        document.getElementById('balancePLN').innerText = data.balance_pln.toFixed(2);
-        
-        const otherCurrenciesDiv = document.getElementById('otherCurrencies');
-        const entries = Object.entries(data.currencies);
-        
-        if (entries.length === 0) {
-            otherCurrenciesDiv.innerHTML = "<small>Inne waluty: brak</small>";
-        } else {
-            let list = entries.map(([curr, amt]) => `<b>${amt.toFixed(2)}</b> ${curr}`).join(', ');
-            otherCurrenciesDiv.innerHTML = `<strong>Twoje waluty:</strong> ${list}`;
+        if (res.status === 401) {
+            handleLogout();
+            return;
         }
-    } catch (e) { 
-        console.error("Błąd podczas aktualizacji portfela:", e); 
+        const data = await res.json();
+        document.getElementById('balancePLN').innerHTML = data.balance_pln.toFixed(2);
+        const currenciesDiv = document.getElementById('userCurrencies');
+        const entries = Object.entries(data.currencies || {});
+        if (entries.length === 0) {
+            currenciesDiv.innerHTML = '<span class="currency-badge">brak</span>';
+        } else {
+            currenciesDiv.innerHTML = entries.map(([c, a]) => `<span class="currency-badge">${a.toFixed(2)} ${c}</span>`).join('');
+        }
+    } catch(e) { console.error(e); }
+}
+
+function showPublicView() {
+    document.getElementById('publicView').classList.remove('hidden');
+    document.getElementById('privateView').classList.add('hidden');
+    document.getElementById('navAuth').innerHTML = '<button class="nav-btn" onclick="openAuthModal()">Zaloguj</button>';
+}
+
+function showPrivateView() {
+    document.getElementById('publicView').classList.add('hidden');
+    document.getElementById('privateView').classList.remove('hidden');
+    document.getElementById('navAuth').innerHTML = '<button class="nav-btn" onclick="handleLogout()">Konto</button>';
+    updateCalculator();
+    updateExchangePreview();
+}
+
+function openAuthModal() {
+    document.getElementById('authModal').classList.remove('hidden');
+    switchTab('login');
+}
+
+function closeAuthModal() {
+    document.getElementById('authModal').classList.add('hidden');
+}
+
+function switchTab(tab) {
+    const loginPanel = document.getElementById('loginPanel');
+    const registerPanel = document.getElementById('registerPanel');
+    const tabs = document.querySelectorAll('.tab');
+    if (tab === 'login') {
+        loginPanel.classList.remove('hidden');
+        registerPanel.classList.add('hidden');
+        tabs[0].classList.add('active');
+        tabs[1].classList.remove('active');
+    } else {
+        loginPanel.classList.add('hidden');
+        registerPanel.classList.remove('hidden');
+        tabs[0].classList.remove('active');
+        tabs[1].classList.add('active');
     }
 }
 
-async function handleDeposit() {
-    const amount = prompt("Podaj kwotę doładowania PLN:");
-    if (!amount || isNaN(amount) || parseFloat(amount) <= 0) return;
-    try {
-        const res = await fetch(`/deposit?amount=${amount}`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${authToken}` }
-        });
-        if (res.ok) updateWallet();
-    } catch (e) { alert("Błąd połączenia."); }
-}
-
 async function handleLogin() {
-    const u = document.getElementById('usernameField').value;
-    const p = document.getElementById('passwordField').value;
-    if (!u || !p) { alert("Wpisz login i hasło!"); return; }
-
+    const username = document.getElementById('loginUser').value.trim();
+    const password = document.getElementById('loginPass').value;
+    if (!username || !password) { alert("Wpisz login i hasło"); return; }
+    
     const formData = new FormData();
-    formData.append('username', u);
-    formData.append('password', p);
+    formData.append('username', username);
+    formData.append('password', password);
     
     try {
         const res = await fetch('/token', { method: 'POST', body: formData });
@@ -65,208 +264,217 @@ async function handleLogin() {
             const data = await res.json();
             authToken = data.access_token;
             localStorage.setItem("token", authToken);
-            location.reload();
-        } else { 
-            alert("Błędne dane logowania."); 
+            closeAuthModal();
+            await loadUserData();
+            showPrivateView();
+            await loadRates();
+        } else {
+            alert("Błędny login lub hasło");
         }
-    } catch (e) { alert("Błąd serwera."); }
+    } catch(e) { alert("Błąd połączenia"); }
 }
 
 async function handleRegister() {
-    const uField = document.getElementById('usernameField');
-    const pField = document.getElementById('passwordField');
-    const u = uField.value;
-    const p = pField.value;
-
-    if (!u || !p) { alert("Wpisz login i hasło dla nowego konta!"); return; }
-
+    const username = document.getElementById('regUser').value.trim();
+    const password = document.getElementById('regPass').value;
+    if (!username || !password) { alert("Wypełnij wszystkie pola"); return; }
+    if (password.length < 4) { alert("Hasło musi mieć min. 4 znaki"); return; }
+    
     try {
-        const res = await fetch('/users/', { 
+        const res = await fetch('/users/', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ username: u, password: p })
+            body: JSON.stringify({ username, password })
         });
-        
         if (res.ok) {
-            alert("Konto utworzone pomyślnie! Teraz możesz się zalogować.");
-            uField.value = "";
-            pField.value = "";
+            alert("Konto utworzone! Możesz się zalogować.");
+            switchTab('login');
+            document.getElementById('loginUser').value = username;
+            document.getElementById('loginPass').value = '';
         } else {
             const err = await res.json();
-            alert("Błąd: " + err.detail);
+            alert(err.detail || "Błąd rejestracji");
         }
-    } catch (e) { alert("Błąd połączenia."); }
+    } catch(e) { alert("Błąd połączenia"); }
 }
 
 async function handleExchange() {
-    const fromCode = document.getElementById('payCurrCode').value.toUpperCase(); 
-    const toCode = document.getElementById('currCode').value.toUpperCase();      
-    const amount = parseFloat(document.getElementById('plnAmount').value);        
-    const statusDiv = document.getElementById('status');
+    const fromCurr = document.getElementById('fromCurrency').value;
+    const toCurr = document.getElementById('toCurrency').value;
+    const amount = parseFloat(document.getElementById('amount').value);
+    const statusDiv = document.getElementById('exchangeStatus');
     
-    if (!fromCode || !toCode || isNaN(amount) || amount <= 0) {
-        alert("Uzupełnij poprawnie wszystkie pola!");
+    if (fromCurr === toCurr) {
+        statusDiv.className = "status status-error";
+        statusDiv.innerHTML = "Waluty muszą być różne";
+        statusDiv.classList.remove('hidden');
         return;
     }
-
-    const availableBalance = userCurrencies[fromCode] || 0;
-    if (amount > availableBalance) {
-        statusDiv.innerHTML = `<div class="error">❌ Brak środków! Masz tylko ${availableBalance.toFixed(2)} ${fromCode}</div>`;
+    if (isNaN(amount) || amount <= 0) {
+        statusDiv.className = "status status-error";
+        statusDiv.innerHTML = "Podaj poprawną kwotę";
+        statusDiv.classList.remove('hidden');
         return;
     }
-
+    
+    statusDiv.className = "status status-info";
+    statusDiv.innerHTML = "Przetwarzanie...";
+    statusDiv.classList.remove('hidden');
+    
     try {
-        const res = await fetch(`/exchange?from_currency=${fromCode}&to_currency=${toCode}&amount=${amount}`, { 
+        const res = await fetch(`/exchange?from_currency=${fromCurr}&to_currency=${toCurr}&amount=${amount}`, {
             method: 'POST',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
-
         const data = await res.json();
-
         if (res.ok) {
-            const receivedAmount = parseFloat(data.otrzymano);
-            statusDiv.innerHTML = `
-                <div class="info">
-                    ✅ <b>Wymiana udana!</b><br>
-                    Pobrano: <b>${amount.toFixed(2)} ${fromCode}</b><br>
-                    Otrzymano: <b>${receivedAmount.toFixed(2)} ${toCode}</b>
-                </div>`;
-            updateWallet();
-            const chartCurrency = toCode === 'PLN' ? fromCode : toCode;
-            showCurrencyChart(chartCurrency, fromCode);
+            statusDiv.className = "status status-success";
+            statusDiv.innerHTML = `✓ Wymiana udana<br>Pobrano: ${parseFloat(data.pobrano).toFixed(2)} ${fromCurr}<br>Otrzymano: ${parseFloat(data.otrzymano).toFixed(4)} ${toCurr}`;
+            document.getElementById('amount').value = '';
+            await loadUserData();
+            await loadRates();
+            updateCalculator();
+            updateExchangePreview();
         } else {
-            let errorMsg = data.detail;
-            if (errorMsg.includes("pobierania kursu") || errorMsg.includes("not found")) {
-                errorMsg = "Wpisz poprawny kod waluty";
-            }
-            statusDiv.innerHTML = `<div class="error">❌ ${errorMsg}</div>`;
+            statusDiv.className = "status status-error";
+            statusDiv.innerHTML = "✗ " + (data.detail || "Błąd wymiany");
         }
-    } catch (e) { 
-        statusDiv.innerHTML = `<div class="error">❌ Błąd połączenia z serwerem.</div>`;
+    } catch(e) {
+        statusDiv.className = "status status-error";
+        statusDiv.innerHTML = "✗ Błąd połączenia";
     }
+}
+
+async function handleDeposit() {
+    const amount = prompt("Kwota doładowania (PLN):", "100");
+    if (!amount) return;
+    const num = parseFloat(amount);
+    if (isNaN(num) || num <= 0) { alert("Podaj poprawną kwotę"); return; }
+    if (num > 10000) { alert("Maksymalna wpłata to 10 000 PLN"); return; }
+    
+    try {
+        const res = await fetch(`/deposit?amount=${num}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${authToken}` }
+        });
+        if (res.ok) {
+            alert(`Doładowano ${num} PLN`);
+            await loadUserData();
+        } else {
+            alert("Błąd doładowania");
+        }
+    } catch(e) { alert("Błąd połączenia"); }
 }
 
 function handleLogout() {
     localStorage.removeItem("token");
-    location.reload();
+    authToken = "";
+    showPublicView();
+    loadRates();
 }
 
-function toggleOptions() {
-    const modal = document.getElementById('optionsModal');
+function toggleSettings() {
+    const modal = document.getElementById('settingsModal');
     modal.classList.toggle('hidden');
+    document.getElementById('newUsername').value = '';
+    document.getElementById('newPassword').value = '';
 }
 
-window.onclick = function(event) {
-    const modal = document.getElementById('optionsModal');
-    if (event.target == modal) {
-        modal.classList.add('hidden');
-    }
+async function updateUsername() {
+    const newUsername = document.getElementById('newUsername').value.trim();
+    if (!newUsername) { alert("Podaj nowy login"); return; }
+    try {
+        const res = await fetch('/users/me/update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ username: newUsername })
+        });
+        if (res.ok) {
+            alert("Login zmieniony. Zaloguj się ponownie.");
+            handleLogout();
+        } else {
+            const err = await res.json();
+            alert(err.detail || "Błąd");
+        }
+    } catch(e) { alert("Błąd"); }
 }
 
-async function updateAccount(type) {
-    const inputId = type === 'username' ? 'newUsername' : 'newPassword';
-    const val = document.getElementById(inputId).value;
-    if (!val) { alert("Pole nie może być puste!"); return; }
-
-    const res = await fetch('/users/me/update', {
-        method: 'PUT',
-        headers: { 
-            'Content-Type': 'application/json', 
-            'Authorization': `Bearer ${authToken}` 
-        },
-        body: JSON.stringify({ [type]: val })
-    });
-
-    if (res.ok) { 
-        alert("Dane zostały zaktualizowane. Zaloguj się ponownie."); 
-        handleLogout(); 
-    } else {
-        const err = await res.json();
-        alert("Błąd aktualizacji: " + err.detail);
-    }
+async function updatePassword() {
+    const newPassword = document.getElementById('newPassword').value;
+    if (!newPassword || newPassword.length < 4) { alert("Hasło musi mieć min. 4 znaki"); return; }
+    try {
+        const res = await fetch('/users/me/update', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+            body: JSON.stringify({ password: newPassword })
+        });
+        if (res.ok) {
+            alert("Hasło zmienione. Zaloguj się ponownie.");
+            handleLogout();
+        } else {
+            alert("Błąd");
+        }
+    } catch(e) { alert("Błąd"); }
 }
 
 async function deleteAccount() {
-    if (confirm("Czy na pewno chcesz całkowicie usunąć konto? Tej operacji nie można cofnąć.")) {
-        const res = await fetch('/users/me', { 
+    if (!confirm("Czy na pewno chcesz usunąć konto? Tej operacji nie można cofnąć.")) return;
+    try {
+        const res = await fetch('/users/me', {
             method: 'DELETE',
             headers: { 'Authorization': `Bearer ${authToken}` }
         });
         if (res.ok) {
             alert("Konto zostało usunięte.");
             handleLogout();
+        } else {
+            alert("Błąd usuwania konta");
         }
-    }
+    } catch(e) { alert("Błąd"); }
 }
 
-async function showCurrencyChart(currencyCode, fromCurrency = 'PLN') {
-    const existingChart = document.getElementById('chartSection');
-    if (existingChart) existingChart.remove();
+window.onclick = function(event) {
+    const authModal = document.getElementById('authModal');
+    const settingsModal = document.getElementById('settingsModal');
+    if (event.target === authModal) closeAuthModal();
+    if (event.target === settingsModal) toggleSettings();
+};
 
-    const chartSection = document.createElement('div');
-    chartSection.id = 'chartSection';
-    chartSection.style.cssText = 'margin-top:20px; background:white; padding:20px; border-radius:12px; box-shadow:0 4px 12px rgba(0,0,0,0.08);';
-    chartSection.innerHTML = `
-        <h4 style="margin:0 0 15px; color:#2c3e50;">📈 Kurs ${currencyCode}/PLN — ostatnie 30 dni</h4>
-        <canvas id="rateChart" height="120"></canvas>
-    `;
-    document.getElementById('status').after(chartSection);
-
+async function handleCardDeposit() {
+    const amount = prompt("Kwota doładowania (PLN):", "100");
+    if (!amount) return;
+    
+    const num = parseFloat(amount);
+    if (isNaN(num) || num <= 0) {
+        alert("Podaj poprawną kwotę");
+        return;
+    }
+    if (num > 10000) {
+        alert("Maksymalna wpłata to 10 000 PLN");
+        return;
+    }
+    
+    const amountGrosze = Math.round(num * 100);
+    
     try {
-        const res = await fetch(`/history/${currencyCode}`);
-        const data = await res.json();
-
-        const labels = data.history.map(h => h.date);
-        const rates = data.history.map(h => h.rate);
-        const min = Math.min(...rates);
-        const max = Math.max(...rates);
-
-        const ctx = document.getElementById('rateChart').getContext('2d');
-        new Chart(ctx, {
-            type: 'line',
-            data: {
-                labels,
-                datasets: [{
-                    label: `${currencyCode}/PLN`,
-                    data: rates,
-                    borderColor: '#3498db',
-                    backgroundColor: 'rgba(52,152,219,0.08)',
-                    borderWidth: 2,
-                    pointRadius: 2,
-                    pointHoverRadius: 5,
-                    fill: true,
-                    tension: 0.3
-                }]
+        const res = await fetch('/create-deposit-session', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${authToken}`
             },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: ctx => `${ctx.parsed.y.toFixed(4)} PLN`
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        ticks: {
-                            maxTicksLimit: 8,
-                            font: { size: 11 }
-                        }
-                    },
-                    y: {
-                        min: parseFloat((min * 0.998).toFixed(4)),
-                        max: parseFloat((max * 1.002).toFixed(4)),
-                        ticks: {
-                            font: { size: 11 },
-                            callback: v => v.toFixed(4)
-                        }
-                    }
-                }
-            }
+            body: JSON.stringify({ amount: amountGrosze })
         });
+        
+        const data = await res.json();
+        
+        if (res.ok && data.url) {
+            // Przekieruj do Stripe Checkout
+            window.location.href = data.url;
+        } else {
+            alert("Błąd tworzenia sesji płatności");
+        }
     } catch(e) {
-        chartSection.innerHTML += '<p style="color:#e74c3c">Nie udało się załadować wykresu.</p>';
+        alert("Błąd połączenia: " + e.message);
     }
 }
