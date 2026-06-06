@@ -3,83 +3,914 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kantor Online</title>
-    <link rel="stylesheet" href="/static/style.css">
+    <title>Kantor Online — wymiana walut po kursie NBP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:opsz,wght@14..32,300;14..32,400;14..32,500;14..32,600;14..32,700;14..32,800&display=swap" rel="stylesheet">
+    <script src="https://js.stripe.com/v3/"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0F172A 0%, #0B1120 50%, #0F172A 100%);
+            color: #F1F5F9;
+            line-height: 1.5;
+            min-height: 100vh;
+        }
+        .container { max-width: 1200px; margin: 0 auto; padding: 0 1.5rem; }
+        
+        .navbar {
+            position: sticky;
+            top: 0;
+            z-index: 100;
+            padding: 1.2rem 0;
+            backdrop-filter: blur(20px);
+            background: rgba(15, 23, 42, 0.8);
+            border-bottom: 1px solid rgba(255,255,255,0.06);
+        }
+        .nav-inner { display: flex; justify-content: space-between; align-items: center; }
+        .logo {
+            font-size: 1.6rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #FFFFFF 0%, #94A3B8 100%);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .nav-btn {
+            background: rgba(255,255,255,0.03);
+            border: 1px solid rgba(255,255,255,0.08);
+            padding: 0.7rem 1.8rem;
+            border-radius: 3rem;
+            font-size: 0.9rem;
+            font-weight: 500;
+            cursor: pointer;
+            color: #F1F5F9;
+            transition: all 0.3s ease;
+        }
+        .nav-btn:hover { background: rgba(59,130,246,0.15); border-color: rgba(59,130,246,0.4); }
+        
+        .hero { text-align: center; max-width: 1000px; margin: 4rem auto 5rem; }
+        .hero-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            color: #94A3B8;
+            margin-bottom: 1.2rem;
+            background: rgba(255,255,255,0.03);
+            padding: 0.4rem 1rem;
+            border-radius: 3rem;
+        }
+        .hero h1 { font-size: 3.5rem; font-weight: 700; letter-spacing: -0.03em; line-height: 1.2; margin-bottom: 1.2rem; }
+        .hero h1 span { background: linear-gradient(135deg, #FFFFFF 0%, #60A5FA 100%); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .hero p { font-size: 1.1rem; color: #9CA3AF; max-width: 600px; margin: 0 auto; }
+        .stats { display: flex; justify-content: center; gap: 3rem; margin-top: 2.5rem; }
+        .stat-value { font-size: 2rem; font-weight: 700; color: #F1F5F9; }
+        .stat-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6B7280; margin-top: 0.2rem; }
+        
+        .section { margin: 5rem 0; }
+        .section-header { text-align: center; margin-bottom: 2.5rem; }
+        .section-header h2 { font-size: 0.85rem; font-weight: 500; letter-spacing: 0.2em; text-transform: uppercase; color: #3B82F6; margin-bottom: 0.75rem; }
+        .section-header p { font-size: 0.9rem; color: #9CA3AF; max-width: 500px; margin: 0 auto; }
+        .rates-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1.2rem; max-width: 800px; margin: 0 auto; }
+        .rate-card {
+            background: linear-gradient(135deg, rgba(30,41,59,0.7) 0%, rgba(30,41,59,0.4) 100%);
+            backdrop-filter: blur(10px);
+            padding: 1.2rem 0.8rem;
+            text-align: center;
+            border-radius: 1.2rem;
+            border: 1px solid rgba(255,255,255,0.06);
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        .rate-card:hover {
+            border-color: rgba(59,130,246,0.5);
+            transform: translateY(-4px);
+            background: linear-gradient(135deg, rgba(30,41,59,0.9) 0%, rgba(30,41,59,0.6) 100%);
+        }
+        .rate-currency { font-size: 1.2rem; font-weight: 700; background: linear-gradient(135deg, #FFFFFF, #94A3B8); -webkit-background-clip: text; background-clip: text; color: transparent; margin-bottom: 0.5rem; }
+        .rate-value { font-size: 1rem; font-weight: 600; color: #D1D5DB; margin-bottom: 0.2rem; }
+        .rate-base { font-size: 0.65rem; color: #6B7280; }
+        
+        @media (max-width: 768px) { .rates-grid { grid-template-columns: repeat(2, 1fr); } .hero h1 { font-size: 2rem; } .stats { gap: 1.5rem; } }
+        @media (max-width: 480px) { .rates-grid { grid-template-columns: 1fr; } }
+        
+        .dashboard { max-width: 900px; margin: 0 auto; }
+        .card {
+            background: rgba(30,41,59,0.7);
+            backdrop-filter: blur(12px);
+            border-radius: 1.5rem;
+            padding: 1.5rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .card:hover { border-color: rgba(59,130,246,0.2); background: rgba(30,41,59,0.8); }
+        .card-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.2rem; padding-bottom: 0.8rem; border-bottom: 1px solid rgba(255,255,255,0.05); }
+        .card-header h3 { font-size: 1rem; font-weight: 500; color: #9CA3AF; }
+        .balance-display { display: flex; justify-content: space-between; gap: 1.5rem; margin-bottom: 1.5rem; flex-wrap: wrap; }
+        .balance-item { flex: 1; }
+        .balance-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6B7280; margin-bottom: 0.3rem; }
+        .balance-amount { font-size: 2rem; font-weight: 700; background: linear-gradient(135deg, #FFFFFF, #D1D5DB); -webkit-background-clip: text; background-clip: text; color: transparent; }
+        .currencies-list { display: flex; flex-wrap: wrap; gap: 0.5rem; margin-top: 0.3rem; }
+        .currency-badge { background: rgba(59,130,246,0.1); padding: 0.3rem 0.8rem; border-radius: 2rem; font-size: 0.8rem; color: #93C5FD; border: 1px solid rgba(59,130,246,0.2); }
+        
+        .btn {
+            border: none;
+            padding: 0.9rem 1.5rem;
+            border-radius: 2.5rem;
+            font-size: 0.95rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            font-family: 'Inter', sans-serif;
+        }
+        .btn-primary { background: linear-gradient(135deg, #3B82F6 0%, #2563EB 100%); color: #FFFFFF; width: 100%; padding: 1rem; font-size: 1rem; }
+        .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(59,130,246,0.3); }
+        .btn-outline { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.1); color: #F1F5F9; }
+        .btn-outline:hover { background: rgba(59,130,246,0.1); border-color: rgba(59,130,246,0.4); }
+        .btn-stripe { background: linear-gradient(135deg, #635bff 0%, #3a2f9e 100%); color: #FFFFFF; width: 100%; padding: 1rem; font-size: 1rem; }
+        .btn-stripe:hover { transform: translateY(-2px); box-shadow: 0 8px 25px rgba(99,91,255,0.3); }
+        .btn-full { width: 100%; }
+        
+        .exchange-calculator {
+            background: linear-gradient(135deg, rgba(30,41,59,0.5), rgba(15,23,42,0.5));
+            border-radius: 1.2rem;
+            padding: 1.2rem;
+            margin-bottom: 1.5rem;
+            border: 1px solid rgba(255,255,255,0.06);
+        }
+        .calculator-title { font-size: 0.8rem; color: #9CA3AF; margin-bottom: 1rem; text-align: center; }
+        .conversion-row { display: flex; align-items: center; gap: 0.8rem; flex-wrap: wrap; }
+        .conversion-input-group {
+            flex: 2;
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            background: rgba(0,0,0,0.3);
+            padding: 0.6rem 1rem;
+            border-radius: 1rem;
+            border: 1px solid rgba(255,255,255,0.08);
+        }
+        .conversion-input-group input { flex: 1; background: transparent; border: none; color: #F1F5F9; font-size: 1rem; font-weight: 600; padding: 0.3rem 0; }
+        .conversion-input-group input:focus { outline: none; }
+        .conversion-input-group select { background: transparent; border: none; color: #60A5FA; font-weight: 600; font-size: 0.85rem; cursor: pointer; }
+        .equals-sign { font-size: 1.1rem; color: #3B82F6; font-weight: 600; }
+        
+        .exchange-form { display: flex; flex-wrap: wrap; gap: 0.8rem; margin-bottom: 1.2rem; }
+        .form-group { flex: 1; min-width: 130px; }
+        .form-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.1em; color: #6B7280; margin-bottom: 0.4rem; display: block; }
+        .form-select, .form-input { width: 100%; padding: 0.8rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 1rem; font-size: 0.9rem; color: #F1F5F9; }
+        .form-select:focus, .form-input:focus { outline: none; border-color: #3B82F6; }
+        .live-rate-info { text-align: center; padding: 0.8rem; background: rgba(59,130,246,0.05); border-radius: 0.8rem; margin-top: 0.8rem; font-size: 0.8rem; color: #93C5FD; }
+        .status { margin-top: 0.8rem; padding: 0.8rem; border-radius: 0.8rem; font-size: 0.85rem; }
+        .status-success { background: rgba(34,197,94,0.08); color: #4ADE80; border: 1px solid rgba(34,197,94,0.15); }
+        .status-error { background: rgba(239,68,68,0.08); color: #F87171; border: 1px solid rgba(239,68,68,0.15); }
+        
+        .payment-modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.9);
+            backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2000;
+        }
+        .payment-container {
+            background: linear-gradient(135deg, #1E293B, #0F172A);
+            border-radius: 2rem;
+            width: 90%;
+            max-width: 450px;
+            padding: 2rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+        }
+        .stripe-header {
+            text-align: center;
+            margin-bottom: 1.5rem;
+        }
+        .stripe-logo {
+            font-size: 2rem;
+            font-weight: 700;
+            background: linear-gradient(135deg, #635bff, #00d4ff);
+            -webkit-background-clip: text;
+            background-clip: text;
+            color: transparent;
+        }
+        .stripe-badge {
+            display: inline-block;
+            background: rgba(99,91,255,0.2);
+            padding: 0.2rem 0.8rem;
+            border-radius: 2rem;
+            font-size: 0.7rem;
+            color: #635bff;
+            margin-top: 0.5rem;
+        }
+        #card-element {
+            background: rgba(255,255,255,0.05);
+            border: 1px solid rgba(255,255,255,0.1);
+            border-radius: 1rem;
+            padding: 1rem;
+            margin-bottom: 1rem;
+        }
+        .payment-amount {
+            font-size: 1.5rem;
+            font-weight: 700;
+            text-align: center;
+            margin-bottom: 1.5rem;
+            color: #F1F5F9;
+        }
+        .payment-amount small { font-size: 0.8rem; color: #6B7280; }
+        .pay-btn {
+            background: linear-gradient(135deg, #635bff, #3a2f9e);
+            color: white;
+            width: 100%;
+            padding: 1rem;
+            border-radius: 2rem;
+            font-size: 1rem;
+            font-weight: 600;
+            margin-top: 0.5rem;
+            border: none;
+            cursor: pointer;
+        }
+        .pay-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+        .secure-badge {
+            text-align: center;
+            font-size: 0.7rem;
+            color: #6B7280;
+            margin-top: 1rem;
+        }
+        .test-card-info {
+            background: rgba(99,91,255,0.1);
+            border-radius: 0.8rem;
+            padding: 0.8rem;
+            margin-top: 1rem;
+            font-size: 0.7rem;
+            color: #9CA3AF;
+            text-align: center;
+        }
+        .test-card-info code {
+            background: rgba(0,0,0,0.3);
+            padding: 0.2rem 0.4rem;
+            border-radius: 0.3rem;
+            font-family: monospace;
+        }
+        
+        .settings-link { text-align: center; margin-top: 1rem; }
+        .settings-link button { background: none; border: none; color: #6B7280; font-size: 0.85rem; cursor: pointer; }
+        .settings-link button:hover { color: #60A5FA; }
+        
+        .modal {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.85);
+            backdrop-filter: blur(20px);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background: linear-gradient(135deg, #1E293B, #0F172A);
+            border-radius: 1.5rem;
+            width: 90%;
+            max-width: 450px;
+            padding: 1.8rem;
+            border: 1px solid rgba(255,255,255,0.1);
+            position: relative;
+        }
+        .modal-close { position: absolute; top: 1rem; right: 1.2rem; font-size: 1.2rem; cursor: pointer; color: #6B7280; }
+        .modal-close:hover { color: #F1F5F9; }
+        .modal-title { font-size: 1.3rem; font-weight: 600; margin-bottom: 1.2rem; }
+        .auth-input { width: 100%; padding: 0.9rem; margin-bottom: 0.9rem; background: rgba(0,0,0,0.3); border: 1px solid rgba(255,255,255,0.08); border-radius: 1rem; font-size: 0.9rem; color: #F1F5F9; }
+        .auth-input:focus { outline: none; border-color: #3B82F6; }
+        .divider { margin: 1.2rem 0; border-top: 1px solid rgba(255,255,255,0.06); }
+        .footer { text-align: center; padding: 2rem 0; border-top: 1px solid rgba(255,255,255,0.04); margin-top: 3rem; color: #6B7280; font-size: 0.7rem; }
+        .hidden { display: none !important; }
+        .loading { text-align: center; padding: 1.5rem; color: #6B7280; }
+    </style>
 </head>
-
 <body>
 
+<div class="navbar">
+    <div class="container">
+        <div class="nav-inner">
+            <div class="logo">kantor<span>.</span></div>
+            <div id="navAuth">
+                <button class="nav-btn" onclick="openLoginModal()">Zaloguj</button>
+            </div>
+        </div>
+    </div>
+</div>
+
 <div class="container">
-    <h1>Kantor Online</h1>
+    <div id="publicView">
+        <div class="hero">
+            <div class="hero-badge">Kursy średnie NBP</div>
+            <h1>wymieniaj waluty<br><span>po kursie NBP</span></h1>
+            <p>Bez prowizji. Bez ukrytych kosztów. Transparentnie i bezpiecznie.</p>
+            <div class="stats">
+                <div class="stat"><div class="stat-value">9+</div><div class="stat-label">walut</div></div>
+                <div class="stat"><div class="stat-value">24/7</div><div class="stat-label">dostępność</div></div>
+                <div class="stat"><div class="stat-value">0%</div><div class="stat-label">prowizji</div></div>
+            </div>
+        </div>
 
-    <div id="authSection">
-        <input type="text" id="usernameField" placeholder="Login">
-        <input type="password" id="passwordField" placeholder="Hasło">
-        <div class="button-group">
-            <button class="btn-login" onclick="handleLogin()">Zaloguj</button>
-            <button class="btn-register" onclick="handleRegister()">Rejestracja</button>
+        <div class="section">
+            <div class="section-header">
+                <h2>Aktualne kursy walut</h2>
+                <p>Kursy wymiany z Narodowego Banku Polskiego</p>
+            </div>
+            <div id="ratesGrid" class="rates-grid">
+                <div class="loading">Ładowanie kursów...</div>
+            </div>
         </div>
     </div>
 
-    <div id="exchangeSection" class="hidden">
-        <h3>Witaj, <span id="displayUser"></span>!</h3>
-        
-        <div class="wallet-card">
-            <div class="wallet-row pln-top">
-                <p>Saldo: <strong id="balancePLN">0.00</strong> PLN</p>
+    <div id="privateView" class="dashboard hidden">
+        <div class="card">
+            <div class="card-header">
+                <h3>Portfel</h3>
             </div>
-            <div id="otherCurrencies" class="wallet-row currencies-mid">
-                <small>Waluty: brak</small>
+            <div class="balance-display">
+                <div class="balance-item">
+                    <div class="balance-label">Saldo PLN</div>
+                    <div class="balance-amount" id="balancePLN">0.00</div>
+                </div>
+                <div class="balance-item">
+                    <div class="balance-label">Portfel walutowy</div>
+                    <div id="userCurrencies" class="currencies-list">—</div>
+                </div>
             </div>
-            <div class="wallet-row button-bottom">
-                <button class="btn-deposit-full-width" onclick="handleDeposit()">➕ Doładuj środki</button>
-            </div>
+            
+            <button class="btn-stripe btn-full" onclick="openStripeModal()">
+                💳 Doładuj kartą (Stripe)
+            </button>
         </div>
 
-        <div class="exchange-form">
-            <label class="input-label">Wpisz kod waluty, którą płacisz (np. PLN, USD):</label>
-            <input type="text" id="payCurrCode" placeholder="Z jakiej waluty">
-
-            <label class="input-label">Wpisz kod waluty, którą chcesz kupić (np. EUR, GBP):</label>
-            <input type="text" id="currCode" placeholder="Na jaką walutę">
-            
-            <label class="input-label">Wpisz kwotę:</label>
-            <input type="number" id="plnAmount" placeholder="Kwota">
-            
-            <button class="btn-buy" onclick="handleExchange()">KUPUJĘ</button>
+        <div class="exchange-calculator">
+            <div class="calculator-title">⚡ KALKULATOR WALUTOWY</div>
+            <div class="conversion-row">
+                <div class="conversion-input-group">
+                    <input type="number" id="calcFromAmount" placeholder="0.00" step="any" value="1">
+                    <select id="calcFromCurrency"></select>
+                </div>
+                <div class="equals-sign">→</div>
+                <div class="conversion-input-group">
+                    <input type="number" id="calcToAmount" placeholder="0.00" step="any" readonly>
+                    <select id="calcToCurrency"></select>
+                </div>
+            </div>
+            <div id="liveRateInfo" class="live-rate-info">Kurs aktualizowany na bieżąco</div>
         </div>
 
-        <div id="status"></div>
+        <div class="card">
+            <div class="card-header">
+                <h3>Wymiana walut</h3>
+            </div>
+            <div class="exchange-form">
+                <div class="form-group">
+                    <div class="form-label">Sprzedaję</div>
+                    <select id="fromCurrency" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">Kupuję</div>
+                    <select id="toCurrency" class="form-select"></select>
+                </div>
+                <div class="form-group">
+                    <div class="form-label">Kwota</div>
+                    <input type="number" id="amount" class="form-input" placeholder="0.00" step="0.01">
+                </div>
+            </div>
+            <div id="exchangePreview" class="live-rate-info">Wprowadź kwotę, aby zobaczyć podgląd</div>
+            <button class="btn-primary btn-full" onclick="handleExchange()">Wymień walutę</button>
+            <div id="exchangeStatus" class="status hidden"></div>
+        </div>
 
-        <hr style="margin: 20px 0; border: 0; border-top: 1px solid #eee;">
+        <div class="settings-link">
+            <button onclick="toggleSettings()">⚙️ Ustawienia konta →</button>
+        </div>
 
-        <button class="btn-toggle" onclick="toggleOptions()">Opcje konta</button>
-        <button class="btn-logout" onclick="handleLogout()">Wyloguj się</button>
+        <div style="text-align: center; margin-top: 1rem;">
+            <button onclick="handleLogout()" class="btn-outline" style="padding: 0.7rem 2rem; width: auto; background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #F87171;">Wyloguj się</button>
+        </div>
     </div>
 </div>
 
-<div id="optionsModal" class="modal hidden">
+<footer class="footer">
+    <p>Kursy walut pochodzą z Narodowego Banku Polskiego • Wymiana po kursie średnim NBP</p>
+</footer>
+
+<!-- MODAL LOGOWANIA - PROSTY -->
+<div id="loginModal" class="modal hidden">
     <div class="modal-content">
-        <span class="close-btn" onclick="toggleOptions()">&times;</span>
-        <h3>⚙️ Opcje konta</h3>
-        
-        <label class="input-label">Zmień login:</label>
-        <input type="text" id="newUsername" placeholder="Nowy login">
-        <button class="btn-small" onclick="updateAccount('username')">Zmień login</button>
-        
-        <label class="input-label">Zmień hasło:</label>
-        <input type="password" id="newPassword" placeholder="Nowe hasło">
-        <button class="btn-small" onclick="updateAccount('password')">Zmień hasło</button>
-        
-        <hr>
-        <button class="btn-delete" onclick="deleteAccount()">Usuń konto całkowicie</button>
+        <span class="modal-close" onclick="closeLoginModal()">✕</span>
+        <div class="modal-title">Logowanie</div>
+        <input type="text" id="loginUser" class="auth-input" placeholder="Nazwa użytkownika">
+        <input type="password" id="loginPass" class="auth-input" placeholder="Hasło">
+        <button class="btn-primary btn-full" onclick="handleLogin()">Zaloguj się</button>
+        <hr class="divider">
+        <div style="text-align: center;">
+            <button class="btn-outline" style="width: auto; padding: 0.5rem 1rem;" onclick="openRegisterModal()">Nie masz konta? Zarejestruj się</button>
+        </div>
     </div>
 </div>
 
+<!-- MODAL REJESTRACJI - PROSTY -->
+<div id="registerModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="modal-close" onclick="closeRegisterModal()">✕</span>
+        <div class="modal-title">Rejestracja</div>
+        <input type="text" id="regUser" class="auth-input" placeholder="Nazwa użytkownika">
+        <input type="password" id="regPass" class="auth-input" placeholder="Hasło (min. 4 znaki)">
+        <button class="btn-primary btn-full" onclick="handleRegister()">Załóż konto</button>
+        <hr class="divider">
+        <div style="text-align: center;">
+            <button class="btn-outline" style="width: auto; padding: 0.5rem 1rem;" onclick="openLoginModal()">Masz już konto? Zaloguj się</button>
+        </div>
+    </div>
+</div>
 
-<script src="/static/script.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
-<script src="/static/script.js"></script>
+<!-- Modal ustawień -->
+<div id="settingsModal" class="modal hidden">
+    <div class="modal-content">
+        <span class="modal-close" onclick="toggleSettings()">✕</span>
+        <div class="modal-title">Ustawienia</div>
+        <input type="text" id="newUsername" class="auth-input" placeholder="Nowy login">
+        <button class="btn-primary btn-full" onclick="updateUsername()" style="margin-bottom: 1rem;">Zmień login</button>
+        <input type="password" id="newPassword" class="auth-input" placeholder="Nowe hasło">
+        <button class="btn-primary btn-full" onclick="updatePassword()">Zmień hasło</button>
+        <hr class="divider">
+        <button class="btn-outline btn-full" onclick="deleteAccount()" style="color: #F87171;">Usuń konto</button>
+    </div>
+</div>
+
+<!-- Modal płatności Stripe -->
+<div id="stripeModal" class="payment-modal hidden">
+    <div class="payment-container">
+        <span class="modal-close" onclick="closeStripeModal()">✕</span>
+        <div class="stripe-header">
+            <div class="stripe-logo">💳 stripe</div>
+            <div class="stripe-badge">tryb testowy</div>
+        </div>
+        <div class="payment-amount" id="stripeAmount">
+            <small>kwota do zapłaty</small><br>
+            0.00 PLN
+        </div>
+        <div id="card-element"></div>
+        <button class="pay-btn" onclick="processStripePayment()">Zapłać</button>
+        <div class="test-card-info">
+            📱 <strong>Karty testowe Stripe</strong><br>
+            <code>4242 4242 4242 4242</code> - Sukces<br>
+            <code>4000 0000 0000 0002</code> - Odrzucona<br>
+            Dowolna data ważności i CVC
+        </div>
+        <div class="secure-badge">🔒 Bezpieczne płatności Stripe • Tryb testowy</div>
+    </div>
+</div>
+
+<script>
+    let authToken = "";  
+    let availableCurrencies = [];
+    let currentRates = {};
+    let pendingAmount = 0;
+    let stripe = null;
+    let cardElement = null;
+
+    window.onload = async () => {
+        await loadRates();
+        await loadCurrencies();
+        await initStripe();
+        if (authToken) {
+            await loadUserData();
+            showPrivateView();
+        } else {
+            showPublicView();
+        }
+        setupCalculatorListeners();
+        setupExchangePreview();
+    };
+    
+    async function initStripe() {
+        try {
+            const configRes = await fetch('/config');
+            const config = await configRes.json();
+            stripe = Stripe(config.stripePublishableKey);
+            const elements = stripe.elements();
+            cardElement = elements.create('card', {
+                style: {
+                    base: { color: '#F1F5F9', fontFamily: 'Inter, sans-serif', fontSize: '16px', '::placeholder': { color: '#6B7280' } },
+                    invalid: { color: '#F87171' }
+                }
+            });
+        } catch(e) { console.error('Błąd Stripe:', e); }
+    }
+
+    async function loadRates() {
+        const grid = document.getElementById('ratesGrid');
+        grid.innerHTML = '<div class="loading">Ładowanie kursów...</div>';
+        try {
+            const res = await fetch('/rates');
+            const data = await res.json();
+            currentRates = data;
+            const currencies = Object.keys(data).filter(c => c !== 'PLN');
+            grid.innerHTML = currencies.map(curr => `
+                <div class="rate-card" onclick="setCurrencyForExchange('${curr}')">
+                    <div class="rate-currency">${curr}</div>
+                    <div class="rate-value">${data[curr].toFixed(4)} PLN</div>
+                    <div class="rate-base">1 ${curr}</div>
+                </div>
+            `).join('');
+        } catch(e) { grid.innerHTML = '<div class="loading">Błąd ładowania kursów</div>'; }
+    }
+
+    function setCurrencyForExchange(currency) {
+        if (document.getElementById('privateView').classList.contains('hidden')) {
+            openLoginModal();
+            return;
+        }
+        document.getElementById('toCurrency').value = currency;
+        updateExchangePreview();
+        updateCalculator();
+    }
+
+    async function loadCurrencies() {
+        try {
+            const res = await fetch('/rates');
+            const data = await res.json();
+            availableCurrencies = Object.keys(data).sort();
+            currentRates = data;
+        } catch(e) {
+            availableCurrencies = ["PLN", "USD", "EUR", "GBP", "CHF", "JPY", "CAD", "AUD", "NOK", "SEK"];
+        }
+        const options = availableCurrencies.map(c => `<option value="${c}">${c}</option>`).join('');
+        document.getElementById('fromCurrency').innerHTML = options;
+        document.getElementById('toCurrency').innerHTML = options;
+        document.getElementById('calcFromCurrency').innerHTML = options;
+        document.getElementById('calcToCurrency').innerHTML = options;
+        document.getElementById('fromCurrency').value = "PLN";
+        document.getElementById('toCurrency').value = "EUR";
+        document.getElementById('calcFromCurrency').value = "PLN";
+        document.getElementById('calcToCurrency').value = "EUR";
+        updateCalculator();
+        updateExchangePreview();
+    }
+
+    function setupCalculatorListeners() {
+        ['calcFromAmount', 'calcFromCurrency', 'calcToCurrency'].forEach(id => {
+            const el = document.getElementById(id);
+            if (el) {
+                el.addEventListener('input', updateCalculator);
+                el.addEventListener('change', updateCalculator);
+            }
+        });
+    }
+
+    function setupExchangePreview() {
+        document.getElementById('fromCurrency').addEventListener('change', updateExchangePreview);
+        document.getElementById('toCurrency').addEventListener('change', updateExchangePreview);
+        document.getElementById('amount').addEventListener('input', updateExchangePreview);
+    }
+
+    function updateCalculator() {
+        const fromAmount = parseFloat(document.getElementById('calcFromAmount')?.value) || 0;
+        const fromCurr = document.getElementById('calcFromCurrency')?.value || 'PLN';
+        const toCurr = document.getElementById('calcToCurrency')?.value || 'EUR';
+        if (!currentRates[fromCurr] || !currentRates[toCurr]) return;
+        const fromRate = currentRates[fromCurr];
+        const toRate = currentRates[toCurr];
+        const toAmount = (fromAmount * fromRate) / toRate;
+        document.getElementById('calcToAmount').value = toAmount.toFixed(4);
+        document.getElementById('liveRateInfo').innerHTML = `📊 1 ${fromCurr} = ${(fromRate / toRate).toFixed(4)} ${toCurr}`;
+    }
+
+    function updateExchangePreview() {
+        const fromCurr = document.getElementById('fromCurrency')?.value || 'PLN';
+        const toCurr = document.getElementById('toCurrency')?.value || 'EUR';
+        const amount = parseFloat(document.getElementById('amount')?.value) || 0;
+        if (!currentRates[fromCurr] || !currentRates[toCurr]) return;
+        const fromRate = currentRates[fromCurr];
+        const toRate = currentRates[toCurr];
+        const receivedAmount = (amount * fromRate) / toRate;
+        const previewDiv = document.getElementById('exchangePreview');
+        if (amount > 0) {
+            previewDiv.innerHTML = `📈 Otrzymasz ${receivedAmount.toFixed(4)} ${toCurr} za ${amount.toFixed(2)} ${fromCurr}`;
+        } else {
+            previewDiv.innerHTML = `📊 1 ${fromCurr} = ${(fromRate / toRate).toFixed(4)} ${toCurr}`;
+        }
+    }
+
+    async function loadUserData() {
+        try {
+            const res = await fetch('/users/me', { headers: { 'Authorization': `Bearer ${authToken}` } });
+            if (res.status === 401) { handleLogout(); return; }
+            const data = await res.json();
+            document.getElementById('balancePLN').innerHTML = data.balance_pln.toFixed(2);
+            const currenciesDiv = document.getElementById('userCurrencies');
+            const entries = Object.entries(data.currencies || {});
+            if (entries.length === 0) {
+                currenciesDiv.innerHTML = '<span class="currency-badge">brak</span>';
+            } else {
+                currenciesDiv.innerHTML = entries.map(([c, a]) => `<span class="currency-badge">${a.toFixed(2)} ${c}</span>`).join('');
+            }
+        } catch(e) { console.error(e); }
+    }
+
+    function showPublicView() {
+        document.getElementById('publicView').classList.remove('hidden');
+        document.getElementById('privateView').classList.add('hidden');
+        document.getElementById('navAuth').innerHTML = '<button class="nav-btn" onclick="openLoginModal()">Zaloguj</button>';
+    }
+
+    function showPrivateView() {
+        document.getElementById('publicView').classList.add('hidden');
+        document.getElementById('privateView').classList.remove('hidden');
+        document.getElementById('navAuth').innerHTML = '<button class="nav-btn" onclick="handleLogout()" style="background: rgba(239,68,68,0.1); border-color: rgba(239,68,68,0.3); color: #F87171;">Wyloguj</button>';
+        updateCalculator();
+        updateExchangePreview();
+    }
+
+    // ========== PROSTE FUNKCJE LOGOWANIA ==========
+    function openLoginModal() {
+        document.getElementById('loginUser').value = '';
+        document.getElementById('loginPass').value = '';
+        document.getElementById('loginModal').classList.remove('hidden');
+    }
+
+    function closeLoginModal() {
+        document.getElementById('loginModal').classList.add('hidden');
+    }
+
+    function openRegisterModal() {
+        closeLoginModal();
+        document.getElementById('regUser').value = '';
+        document.getElementById('regPass').value = '';
+        document.getElementById('registerModal').classList.remove('hidden');
+    }
+
+    function closeRegisterModal() {
+        document.getElementById('registerModal').classList.add('hidden');
+    }
+
+    async function handleLogin() {
+        const username = document.getElementById('loginUser').value.trim();
+        const password = document.getElementById('loginPass').value;
+        
+        if (!username || !password) {
+            alert("Wpisz login i hasło");
+            return;
+        }
+        
+        const formData = new FormData();
+        formData.append('username', username);
+        formData.append('password', password);
+        
+        try {
+            const res = await fetch('/token', { method: 'POST', body: formData });
+            if (res.ok) {
+                const data = await res.json();
+                authToken = data.access_token;
+                authToken = data.access_token;
+                closeLoginModal();
+                await loadUserData();
+                showPrivateView();
+                await loadRates();
+            } else {
+                alert("Błędny login lub hasło");
+            }
+        } catch(e) {
+            alert("Błąd połączenia");
+        }
+    }
+
+    async function handleRegister() {
+        const username = document.getElementById('regUser').value.trim();
+        const password = document.getElementById('regPass').value;
+        
+        if (!username || !password) {
+            alert("Wypełnij wszystkie pola");
+            return;
+        }
+        
+        if (password.length < 4) {
+            alert("Hasło musi mieć min. 4 znaki");
+            return;
+        }
+        
+        try {
+            const res = await fetch('/users/', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ username, password })
+            });
+            
+            if (res.ok) {
+                alert("Konto utworzone! Możesz się zalogować.");
+                closeRegisterModal();
+                openLoginModal();
+                document.getElementById('loginUser').value = username;
+            } else {
+                const err = await res.json();
+                alert(err.detail || "Błąd rejestracji");
+            }
+        } catch(e) {
+            alert("Błąd połączenia");
+        }
+    }
+
+    async function handleExchange() {
+        const fromCurr = document.getElementById('fromCurrency').value;
+        const toCurr = document.getElementById('toCurrency').value;
+        const amount = parseFloat(document.getElementById('amount').value);
+        const statusDiv = document.getElementById('exchangeStatus');
+        
+        if (fromCurr === toCurr) {
+            statusDiv.className = "status status-error";
+            statusDiv.innerHTML = "Waluty muszą być różne";
+            statusDiv.classList.remove('hidden');
+            return;
+        }
+        if (isNaN(amount) || amount <= 0) {
+            statusDiv.className = "status status-error";
+            statusDiv.innerHTML = "Podaj poprawną kwotę";
+            statusDiv.classList.remove('hidden');
+            return;
+        }
+        
+        statusDiv.className = "status status-info";
+        statusDiv.innerHTML = "Przetwarzanie...";
+        statusDiv.classList.remove('hidden');
+        
+        try {
+            const res = await fetch(`/exchange?from_currency=${fromCurr}&to_currency=${toCurr}&amount=${amount}`, {
+                method: 'POST',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            const data = await res.json();
+            if (res.ok) {
+                statusDiv.className = "status status-success";
+                statusDiv.innerHTML = `✓ Wymiana udana<br>Pobrano: ${parseFloat(data.pobrano).toFixed(2)} ${fromCurr}<br>Otrzymano: ${parseFloat(data.otrzymano).toFixed(4)} ${toCurr}`;
+                document.getElementById('amount').value = '';
+                await loadUserData();
+                await loadRates();
+                updateCalculator();
+                updateExchangePreview();
+            } else {
+                statusDiv.className = "status status-error";
+                statusDiv.innerHTML = "✗ " + (data.detail || "Błąd wymiany");
+            }
+        } catch(e) {
+            statusDiv.className = "status status-error";
+            statusDiv.innerHTML = "✗ Błąd połączenia";
+        }
+    }
+
+    function openStripeModal() {
+        const amount = prompt("Kwota doładowania (PLN):", "100");
+        if (!amount) return;
+        const num = parseFloat(amount);
+        if (isNaN(num) || num <= 0) { alert("Podaj poprawną kwotę"); return; }
+        if (num > 10000) { alert("Maksymalna wpłata to 10 000 PLN"); return; }
+        pendingAmount = num;
+        document.getElementById('stripeAmount').innerHTML = `<small>kwota do zapłaty</small><br>${num.toFixed(2)} PLN`;
+        document.getElementById('stripeModal').classList.remove('hidden');
+        if (cardElement) { cardElement.mount('#card-element'); }
+    }
+
+    function closeStripeModal() {
+        document.getElementById('stripeModal').classList.add('hidden');
+        if (cardElement) { cardElement.unmount(); }
+    }
+
+    async function processStripePayment() {
+        if (!stripe || !cardElement) {
+            alert("Inicjalizacja Stripe... Spróbuj ponownie");
+            return;
+        }
+        
+        const payBtn = document.querySelector('#stripeModal .pay-btn');
+        payBtn.disabled = true;
+        payBtn.textContent = "Przetwarzanie...";
+        
+        try {
+            const intentRes = await fetch('/stripe/create-payment-intent', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ amount: pendingAmount })
+            });
+            
+            const intentData = await intentRes.json();
+            if (!intentRes.ok) throw new Error(intentData.detail || "Błąd tworzenia płatności");
+            
+            const { error, paymentIntent } = await stripe.confirmCardPayment(intentData.clientSecret, {
+                payment_method: { card: cardElement }
+            });
+            
+            if (error) {
+                alert(`Błąd: ${error.message}`);
+                payBtn.disabled = false;
+                payBtn.textContent = "Zapłać";
+                return;
+            }
+            
+            if (paymentIntent.status === 'succeeded') {
+                const confirmRes = await fetch(`/stripe/confirm-payment?payment_intent_id=${paymentIntent.id}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                const confirmData = await confirmRes.json();
+                if (confirmData.success) {
+                    alert(`✅ ${confirmData.message}`);
+                    await loadUserData();
+                    closeStripeModal();
+                } else {
+                    alert(`❌ ${confirmData.error}`);
+                }
+            }
+        } catch(e) {
+            alert("Błąd: " + e.message);
+        } finally {
+            payBtn.disabled = false;
+            payBtn.textContent = "Zapłać";
+        }
+    }
+
+    function handleLogout() {
+        sessionStorage.removeItem("token");
+        authToken = "";
+        showPublicView();
+        loadRates();
+    }
+
+    function toggleSettings() {
+        const modal = document.getElementById('settingsModal');
+        modal.classList.toggle('hidden');
+        if (!modal.classList.contains('hidden')) {
+            document.getElementById('newUsername').value = '';
+            document.getElementById('newPassword').value = '';
+        }
+    }
+
+    async function updateUsername() {
+        const newUsername = document.getElementById('newUsername').value.trim();
+        if (!newUsername) { alert("Podaj nowy login"); return; }
+        try {
+            const res = await fetch('/users/me/update', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ username: newUsername })
+            });
+            if (res.ok) {
+                alert("Login zmieniony. Zaloguj się ponownie.");
+                handleLogout();
+            } else { alert("Błąd"); }
+        } catch(e) { alert("Błąd"); }
+    }
+
+    async function updatePassword() {
+        const newPassword = document.getElementById('newPassword').value;
+        if (!newPassword || newPassword.length < 4) { alert("Hasło musi mieć min. 4 znaki"); return; }
+        try {
+            const res = await fetch('/users/me/update', {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${authToken}` },
+                body: JSON.stringify({ password: newPassword })
+            });
+            if (res.ok) {
+                alert("Hasło zmienione. Zaloguj się ponownie.");
+                handleLogout();
+            } else { alert("Błąd"); }
+        } catch(e) { alert("Błąd"); }
+    }
+
+    async function deleteAccount() {
+        if (!confirm("Czy na pewno chcesz usunąć konto? Tej operacji nie można cofnąć.")) return;
+        try {
+            const res = await fetch('/users/me', {
+                method: 'DELETE',
+                headers: { 'Authorization': `Bearer ${authToken}` }
+            });
+            if (res.ok) {
+                alert("Konto zostało usunięte.");
+                handleLogout();
+            } else { alert("Błąd usuwania konta"); }
+        } catch(e) { alert("Błąd"); }
+    }
+
+    window.onclick = function(event) {
+        if (event.target === document.getElementById('loginModal')) closeLoginModal();
+        if (event.target === document.getElementById('registerModal')) closeRegisterModal();
+        if (event.target === document.getElementById('settingsModal')) toggleSettings();
+        if (event.target === document.getElementById('stripeModal')) closeStripeModal();
+    };
+</script>
 
 </body>
 </html>
