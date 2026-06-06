@@ -1,16 +1,35 @@
-from fastapi import FastAPI, HTTPException, status, Depends
+from fastapi import FastAPI, HTTPException, status, Depends, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from sqlmodel import Session, select
 from typing import List, Optional
 from contextlib import asynccontextmanager
 import httpx
 from pydantic import BaseModel
+import os
+from datetime import datetime, timedelta
+import asyncio
+import stripe
+import secrets
 
 from database import engine, create_db_and_tables, User, Transaction
 from auth import get_current_user, create_access_token, verify_password, hash_password
+
+# ============================================================
+# KONFIGURACJA STRIPE - TRYB TESTOWY
+# ============================================================
+STRIPE_SECRET_KEY = "sk_test_51TbI0yK0857NUwxxiE605Rn9V260DuSIO0dWjYLbvpZxeraxzgQQ4ikkLiVGjx5mGURpVR6JBHBihm61fHicioWi00zcJrnnuT"
+STRIPE_PUBLISHABLE_KEY = "pk_test_51TbI0yK0857NUwxx7SHeGpeAOHiyPBjSAIQxCEItW8jh1DVMXlT44FRiYegIxKKoJaXTRggAtfV0V9uw49eAnRWB00BgT9lUYU"
+
+stripe.api_key = STRIPE_SECRET_KEY
+# ============================================================
+
+# Cache dla kursów
+cached_rates = {}
+cache_time = None
+CACHE_DURATION = 60
 
 
 @asynccontextmanager
@@ -44,13 +63,29 @@ class AdminUserView(BaseModel):
     pln: float
     inne_waluty: dict
 
+class DepositRequest(BaseModel):
+    amount: int  # w groszach
 
-app.mount("/static", StaticFiles(directory="static"), name="static")
+class PaymentRequest(BaseModel):
+    amount: float  # w PLN
+
+
+static_dir = "static"
+if not os.path.exists(static_dir):
+    os.makedirs(static_dir)
+
+app.mount("/static", StaticFiles(directory=static_dir), name="static")
 
 
 @app.get("/")
 async def read_index():
     return FileResponse('static/index.html')
+
+
+@app.get("/config")
+async def get_config():
+    """Zwraca publiczny klucz Stripe do frontendu"""
+    return {"stripePublishableKey": STRIPE_PUBLISHABLE_KEY}
 
 
 # --- LOGOWANIE I REJESTRACJA ---
@@ -80,8 +115,6 @@ def create_user(user: UserCreate):
         session.commit()
         return {"message": "Użytkownik stworzony"}
 
-
-# --- ZARZĄDZANIE KONTEM ---
 
 @app.get("/users/me")
 def get_me(current_user: User = Depends(get_current_user)):
@@ -131,9 +164,9 @@ async def get_currency_rate(currency_code: str):
         return 1.0
     url = f"https://api.nbp.pl/api/exchangerates/rates/a/{currency_code}/?format=json"
     async with httpx.AsyncClient() as client:
-        response = await client.get(url)
+        response = await client.get(url, timeout=5.0)
         if response.status_code != 200:
-            raise HTTPException(status_code=400, detail=f"Błąd pobierania kursu {currency_code} z NBP")
+            raise HTTPException(status_code=400, detail=f"Błąd pobierania kursu {currency_code}")
         return response.json()["rates"][0]["mid"]
 
 
@@ -141,12 +174,35 @@ async def get_currency_rate(currency_code: str):
 async def get_rate_endpoint(currency_code: str):
     try:
         rate = await get_currency_rate(currency_code)
-        return {
-            "currency": currency_code.upper(),
-            "mid": rate
-        }
+        return {"currency": currency_code.upper(), "mid": rate}
     except HTTPException:
         raise HTTPException(status_code=404, detail=f"Waluta {currency_code.upper()} nie istnieje")
+
+
+@app.get("/rates")
+async def get_all_rates():
+    global cached_rates, cache_time
+    
+    if cache_time and datetime.now() - cache_time < timedelta(seconds=CACHE_DURATION):
+        return cached_rates
+    
+    currencies = ["USD", "EUR", "GBP", "CHF", "JPY", "CAD", "AUD", "NOK", "SEK"]
+    rates = {}
+    
+    tasks = [get_currency_rate(curr) for curr in currencies]
+    results = await asyncio.gather(*tasks, return_exceptions=True)
+    
+    for curr, result in zip(currencies, results):
+        if isinstance(result, Exception):
+            continue
+        rates[curr] = result
+    
+    rates["PLN"] = 1.0
+    
+    cached_rates = rates
+    cache_time = datetime.now()
+    
+    return rates
 
 
 @app.post("/exchange")
@@ -158,6 +214,9 @@ async def exchange_currency(
 ):
     from_currency = from_currency.upper()
     to_currency = to_currency.upper()
+
+    if amount <= 0:
+        raise HTTPException(status_code=400, detail="Kwota musi być większa od 0")
 
     if from_currency == to_currency:
         raise HTTPException(status_code=400, detail="Waluty muszą być różne")
@@ -203,20 +262,113 @@ async def exchange_currency(
         }
 
 
+# --- TRADYCYJNE DOŁADOWANIE (API 1) ---
+
 @app.post("/deposit")
 async def deposit_money(amount: float, current_user: User = Depends(get_current_user)):
     if amount <= 0:
         raise HTTPException(status_code=400, detail="Kwota musi być dodatnia")
     if amount > 10000:
         raise HTTPException(status_code=400, detail="Maksymalna jednorazowa wpłata to 10 000 PLN")
+    
     with Session(engine) as session:
         user = session.get(User, current_user.id)
         user.balance_pln += amount
         session.add(user)
+        
+        deposit_transaction = Transaction(
+            user_id=user.id,
+            currency="PLN",
+            amount=amount,
+            rate=1.0
+        )
+        session.add(deposit_transaction)
         session.commit()
         session.refresh(user)
+        
         return {"message": "Wpłacono pomyślnie", "new_balance": user.balance_pln}
 
+
+# ============ API 2: STRIPE INTEGRATION - SYMULACJA ============
+
+@app.post("/stripe/create-payment-intent")
+async def create_payment_intent(
+    request: PaymentRequest,
+    current_user: User = Depends(get_current_user)
+):
+    """Tworzy PaymentIntent w Stripe - dla testowych kart"""
+    try:
+        amount_grosze = int(request.amount * 100)
+        
+        # Tworzenie PaymentIntent w Stripe (tryb testowy)
+        intent = stripe.PaymentIntent.create(
+            amount=amount_grosze,
+            currency="pln",
+            metadata={
+                "user_id": str(current_user.id),
+                "username": current_user.username
+            }
+        )
+        
+        return {
+            "clientSecret": intent.client_secret,
+            "paymentIntentId": intent.id
+        }
+        
+    except Exception as e:
+        print(f"Błąd Stripe: {e}")
+        raise HTTPException(status_code=400, detail=str(e))
+
+
+@app.post("/stripe/confirm-payment")
+async def confirm_payment(
+    payment_intent_id: str,
+    current_user: User = Depends(get_current_user)
+):
+    """Potwierdza płatność i doładowuje konto"""
+    try:
+        # Pobierz PaymentIntent ze Stripe
+        intent = stripe.PaymentIntent.retrieve(payment_intent_id)
+        
+        if intent.status == "succeeded":
+            amount_pln = intent.amount / 100
+            
+            with Session(engine) as session:
+                user = session.get(User, current_user.id)
+                user.balance_pln += amount_pln
+                session.add(user)
+                
+                deposit_transaction = Transaction(
+                    user_id=user.id,
+                    currency="PLN",
+                    amount=amount_pln,
+                    rate=1.0
+                )
+                session.add(deposit_transaction)
+                session.commit()
+            
+            return {"success": True, "message": f"Doładowano {amount_pln:.2f} PLN"}
+        else:
+            return {"success": False, "error": f"Status płatności: {intent.status}"}
+            
+    except Exception as e:
+        print(f"Błąd weryfikacji: {e}")
+        return {"success": False, "error": str(e)}
+
+
+@app.get("/stripe/success")
+async def stripe_payment_success():
+    """Strona sukcesu"""
+    return FileResponse('static/success.html')
+
+
+@app.get("/stripe/cancel")
+async def stripe_payment_cancel():
+    """Strona anulowania"""
+    return FileResponse('static/cancel.html')
+
+
+# --- ADMIN ---
 
 @app.get("/admin/all_users", response_model=List[AdminUserView])
 def get_all_users_admin(current_user: User = Depends(get_current_user)):
@@ -241,27 +393,6 @@ def get_all_users_admin(current_user: User = Depends(get_current_user)):
         return result
 
 
-@app.get("/history/{currency_code}")
-async def get_currency_history(currency_code: str):
-    from datetime import date, timedelta
-    end_date = date.today()
-    start_date = end_date - timedelta(days=30)
-    
-    url = f"https://api.frankfurter.app/{start_date}..{end_date}?from=PLN&to={currency_code.upper()}"
-    
-    async with httpx.AsyncClient() as client:
-        response = await client.get(url, follow_redirects=True)
-        if response.status_code != 200:
-            raise HTTPException(status_code=400, detail="Nie udało się pobrać historii kursu")
-        
-        data = response.json()
-        rates = data.get("rates", {})
-        
-        return {
-            "currency": currency_code.upper(),
-            "history": [
-                {"date": date_str, "rate": round(1 / values[currency_code.upper()], 4)}
-                for date_str, values in sorted(rates.items())
-                if currency_code.upper() in values
-            ]
-        }
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
